@@ -236,3 +236,25 @@ class Choice(models.Model):
     def save(self, *args, **kwargs):
         self.slug = slugify(self.label).replace("-", "_")[:50]
         super(Choice, self).save(*args, **kwargs)
+
+
+class FormData(models.Model):
+    form = models.ForeignKey(Form, related_name="formdata_set")
+    data = models.TextField()
+    is_readed = models.BooleanField(u'Is Readed', default=False)
+    remark = models.TextField(u'Remark', null=True)
+    
+    created = models.DateTimeField(auto_now_add=True)
+    last_modified = models.DateTimeField(auto_now=True)
+    creator_ip = models.IPAddressField(_('Creator IP'))
+
+
+    class Meta:
+        ordering = ('-id',)        
+    
+    @property
+    def values(self):
+        return json.loads(self.data)
+
+    def __unicode__(self):
+        return self.form.name

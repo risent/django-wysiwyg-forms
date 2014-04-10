@@ -8,8 +8,9 @@ from django.template import RequestContext
 from django.utils import simplejson as json
 from django.views.generic import DetailView, FormView
 
+from genericimage.models import GenericImage
 from .exceptions import WysiwygFormsException
-from .models import Form
+from .models import Form, Field, Choice
 from .transactions import Transaction
 
 __all__ = ("ApplyTransactions", "Edit", "WysiwygFormView")
@@ -146,3 +147,71 @@ class WysiwygFormView(FormView):
     def get_form_class(self):
         return self.get_wysiwyg_form().as_django_form()
 
+    
+
+    def form_valid(self, form):
+        # store the data in database with json format
+        data = {} #self.request.POST
+        imgs = {}
+ 
+        for field in form:
+
+            if type(field.field) == forms.MultipleChoiceField:
+                values = []
+                for v in field.value():
+                    value = Choice.objects.filter(slug=v)[0].label
+                    values.append(value)
+                data[field.label] =  ' | '.join(values)
+            elif type(field.field) == forms.ChoiceField:
+                value = Choice.objects.filter(slug=field.value())[0].label
+                data[field.label] = value
+            elif type(field.field) == forms.BooleanField:
+                if field.value() == 'on':
+                    data[field.label] = 'Yes'
+                else:
+                    data[field.label] = 'No'
+            elif 'type="file"' in str(field):
+                imgs[field.name] = field.label
+            elif 'radio' in str(field):
+                value = Choice.objects.filter(slug=field.value())[0].label
+                data[field.label] = value
+            else:
+                data[field.label] = field.value()
+        # if data['csrfmiddlewaretoken']:
+            # del data['csrfmiddlewaretoken']
+
+        files = self.request.FILES
+
+        if files:
+            for f in files.keys():
+                image = GenericImage()
+                image.image = files[f]
+                image.save()
+                image_url = image.image.url
+                label = imgs[f]
+                data[label] = image_url
+
+        result = json.dumps(data, ensure_ascii=False)
+
+        if getattr(settings, "BEHIND_PROXY", False):
+            creator_ip = self.request.META["HTTP_X_FORWARDED_FOR"].split(',')[0]
+        else:
+            creator_ip = self.request.META["REMOTE_ADDR"]
+
+        FormData.objects.create(
+            form=self.get_wysiwyg_form(),
+            data=result,
+            creator_ip = creator_ip,
+        )
+        messages.add_message(self.request, messages.SUCCESS,
+                             u"表单提交成功",
+                             )
+
+        if self.request.is_ajax():
+            return http.HttpResponse(result)
+
+        template_name='wysiwyg_forms/success.html'
+        if self.get_success_url():
+            return http.HttpResponseRedirect(self.get_success_url())
+        return render(self.request,template_name, {'form_url': self.request.path })
+        # return super(WysiwygFormView, self).form_valid(form)
