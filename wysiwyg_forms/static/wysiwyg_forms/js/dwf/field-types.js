@@ -18,6 +18,11 @@ define(function (require, exports, module) {
           description: "Select single option",
           hasChoices: true },
 
+        { fieldType: "ChoiceField",
+          widget: "RadioSelect",
+          description: "Radio Select",
+          hasChoices: true },
+
         { fieldType: "DateField",
           widget: "DateInput",
           description: "Date" },
